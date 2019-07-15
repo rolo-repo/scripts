@@ -1,0 +1,169 @@
+#!/usr/bin/ksh
+
+
+help_and_exit()
+{
+echo "#-------------------------------------------------------------------------"
+echo "Usage :"
+echo "#         -h/--help             <Help>"
+echo "#         -w/--wd < enable  watch dog>"
+echo "#         -C/--command  <command to be executed , if long string shpuld be with \"\">"
+echo "#         [-t/--title]   <a prefix to the log>"
+echo "#Example : nohup RunJobWD -c \"perl -e 'sleep 100;'\" -e&"
+echo "#-------------------------------------------------------------------------"
+
+exit 1;
+}
+
+init_args()
+{
+  
+##################################
+# Convert long parameter to short
+##################################
+for arg in "$@"; do
+  shift
+  case "$arg" in
+    "--wd")     set -- "$@" "-w" ;;
+    "--command") set -- "$@" "-c" ;;
+    "--title")   set -- "$@" "-t" ;;
+    "--help")    set -- "$@" "-h" ;;
+    *)           set -- "$@" "$arg" ;;
+  esac
+done
+
+
+#################################
+#  Parse parameters
+#################################
+
+while getopts "t:ehc:" opt
+do
+  case $opt in
+      w)  WD_ENABLED=true
+      ;;
+      
+      c)  COMMAND="${OPTARG}"
+          echo "== > INFO [`date "+%Y%m%d"`_`date "+%H%M%S"`]: Command is [${COMMAND}]"
+      ;;
+      t)  JOB_NAME="${OPTARG}"
+      ;;
+      
+      h)  help_and_exit
+      ;;
+      \?)  
+           echo "== > ERROR [`date "+%Y%m%d"`_`date "+%H%M%S"`]: unkown input prameter provided , check usage"
+           help_and_exit
+      ;;
+  esac
+done  
+
+##########################################################
+#  all mandatory parameters provided verification section
+##########################################################
+if [[ -z ${COMMAND} ]]
+  then 
+    echo "==> ERROR: Command is not provided"
+    help_and_exit
+fi
+
+if [[ -z ${JOB_NAME} ]]
+then
+  JOB_NAME=$(basename `echo ${COMMAND} | awk '{ print $1 }'`)
+  
+fi
+
+echo "== > INFO [`date "+%Y%m%d"`_`date "+%H%M%S"`]: Job is [${JOB_NAME}]"
+
+}
+
+#================================#
+#                                #
+#            M A I N             #
+#                                #
+#================================#
+
+TIME=`date "+%H%M%S"`
+DATE=`date "+%Y%m%d"`
+
+if [[ -z ${APPL_LOG} ]]
+  then
+  APPL_LOG=${HOME}
+  mkdir -p ${APPL_LOG}
+fi
+
+# Close STDOUT file descriptor
+exec 1<&-
+# Close STDERR FD
+exec 2<&-
+
+# Open STDOUT as $LOG_FILE file for read and write.
+exec 1<>${APPL_LOG}/$(basename $0)_$$_${DATE}_${TIME}.log
+
+# Redirect STDERR to STDOUT
+exec 2>&1
+
+init_args "$@"
+
+if [[ -e ${HOME}/.profile ]]
+  then
+  . ${HOME}/.profile
+fi
+
+COMMAND=`echo ${COMMAND}| perl -pe 's/\*/\\\\\\\*/g;'`
+
+#Check if already running with WD 
+t_pid=`ps -fu $USER | grep "${COMMAND}" | grep "$(basename $0)" | grep -v grep | grep -v $$ | tr -s " " | cut -d" " -f2`
+      
+if [[ -n ${t_pid} ]]
+  then
+    echo "== > INFO [`date "+%Y%m%d"`_`date "+%H%M%S"`]: Found alrady running job PID [${t_pid}] exiting"
+    exit 0;
+fi
+
+WRAPPER=`mktemp -p ${APPL_LOG}`
+
+echo "== > INFO [`date "+%Y%m%d"`_`date "+%H%M%S"`]: Command is [${COMMAND}]"
+echo "== > INFO [`date "+%Y%m%d"`_`date "+%H%M%S"`]: Wraper script name is [${WRAPPER}]"
+
+echo "#!/bin/ksh" > ${WRAPPER} 
+echo 'echo =====================;echo "== > INFO [`date "+%Y%m%d"`_`date "+%H%M%S"`]: going to execute command "['${COMMAND}'];echo =====================' >> ${WRAPPER} 
+echo "${COMMAND}" >> ${WRAPPER} 
+#nohup ${COMMAND_CHANGED} >> ${APPL_LOG}/${SCRIPT_NAME}_${DATE}_${TIME}.log 2>&1
+chmod 755 ${WRAPPER} 
+
+#echo "################"
+#cat ${WRAPPER}
+#echo "################"
+
+
+if [[ ${WD_ENABLED} == "true" ]]
+  then
+    while [[ 0 == 0 ]]
+    do
+      echo "== > INFO [`date "+%Y%m%d"`_`date "+%H%M%S"`]: Running command [${COMMAND}] as daemon with EWD"
+      nohup ${WRAPPER} >> ${APPL_LOG}/${JOB_NAME}_${DATE}_${TIME}.log 2>&1 &
+      
+      psupid=`ps -fu $USER | grep ${WRAPPER} | grep -v grep | tr -s " " | cut -d" " -f2`
+      kill -0 $psupid > /dev/null 2>&1
+      RUNNING=$?
+              
+      # check whether the process is alive, if it isn't,
+      # leave the loop and bounce the process
+      while [[ $RUNNING == 0 ]]
+      do
+        kill -0 $psupid > /dev/null 2>&1
+        RUNNING=$?
+        sleep 10
+      done
+      
+      #run again
+      TIME=`date "+%H%M%S"`
+      DATE=`date "+%Y%m%d"`
+    done
+else
+  echo "== > INFO [`date "+%Y%m%d"`_`date "+%H%M%S"`]: Running command [${COMMAND}] as job"
+  nohup ${WRAPPER} >> ${APPL_LOG}/${JOB_NAME}_${DATE}_${TIME}.log 2>&1
+fi
+
+rm ${WRAPPER}

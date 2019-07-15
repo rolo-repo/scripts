@@ -1,0 +1,35 @@
+#!/bin/ksh
+#read input params
+SCRIPT_NAME=$1
+shift
+export COMMAND=$*
+
+# Close STDOUT file descriptor
+exec 1<&-
+# Close STDERR FD
+exec 2<&-
+
+. ${HOME}/.profile
+
+TIME=`date "+%H%M%S"`
+DATE=`date "+%Y%m%d"`
+
+# Open STDOUT as $LOG_FILE file for read and write.
+exec 1<>${APPL_LOG}/${SCRIPT_NAME}_${DATE}_${TIME}.log
+
+# Redirect STDERR to STDOUT
+exec 2>&1
+
+#echo Running : ${COMMAND}
+
+#COMMAND=`echo ${COMMAND} | sed -e "s|*|\\*|g"`
+COMMAND_CHANGED=`perl -e '$ENV{COMMAND} =~ s/\*/\\\\\\\*/g; print $ENV{COMMAND};'`
+echo Running : ${COMMAND_CHANGED} PID $$
+
+WRAPPER=`mktemp`
+echo "#!/bin/ksh" > ${WRAPPER} 
+echo "${COMMAND_CHANGED}" >> ${WRAPPER} 
+#nohup ${COMMAND_CHANGED} >> ${APPL_LOG}/${SCRIPT_NAME}_${DATE}_${TIME}.log 2>&1
+chmod 755 ${WRAPPER} 
+nohup ${WRAPPER} >> ${APPL_LOG}/${SCRIPT_NAME}_${DATE}_${TIME}.log 2>&1
+rm ${WRAPPER}
