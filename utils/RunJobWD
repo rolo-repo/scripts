@@ -7,7 +7,7 @@ echo "#-------------------------------------------------------------------------
 echo "Usage :"
 echo "#         -h/--help             <Help>"
 echo "#         -w/--wd < enable  watch dog>"
-echo "#         -C/--command  <command to be executed , if long string shpuld be with \"\">"
+echo "#         -c/--command  <command to be executed , if long string shpuld be with \"\">"
 echo "#         [-t/--title]   <a prefix to the log>"
 echo "#Example : nohup RunJobWD -c \"perl -e 'sleep 100;'\" -e&"
 echo "#-------------------------------------------------------------------------"
@@ -37,7 +37,7 @@ done
 #  Parse parameters
 #################################
 
-while getopts "t:ehc:" opt
+while getopts "t:whc:" opt
 do
   case $opt in
       w)  WD_ENABLED=true
