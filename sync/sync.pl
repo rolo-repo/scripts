@@ -234,7 +234,7 @@ sub _sync_HDFS ( $$$$ )
    {
       $hdfs_command = 'hdfs dfs -mkdir -p "' . hdfs_escape($hdfs_path) . '" >/dev/null 2>&1';
       #$loggerSTDOUT->Debug( $hdfs_command );
-      AbstractHandler::executeCommand( $logger, $hdfs_command ) or return $logger->Error("Failed to create a directory in hadoop [$hdfs_path] $!");
+      AbstractHandler::executeCommand( $logger, $hdfs_command );# or return $logger->Error("Failed to create a directory in hadoop [$hdfs_path] $!");
       
       #make a copy in bulks as there is a limit on a command line size
       my $bulk_size = 128;
